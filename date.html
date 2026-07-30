@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de">
+   <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <title>Random Date</title>
+      <link rel="icon" type="image/png" href="https://img.icons8.com/?size=1000&id=12776&format=png">
+      <style>
+         body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+         }
+         .card {
+            background: #fff;
+            padding: 38px 50px;
+            border-radius: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            min-width: 350px;
+         }
+         #weekday {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+            height: 2.5rem;
+            margin-bottom: 18px;
+         }
+         #weekday.placeholder {
+            font-size: 1.2rem;
+            font-weight: normal;
+            color: #777;
+         }
+         #date {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 15px 0;
+         }
+         #time {
+            font-size: 1.2rem;
+            margin-top: 10px;
+            color: #555;
+            height: 1.5rem;
+         }
+         @media (max-width: 768px) {
+         html, body {
+            height: 100%;
+         }
+         .card {
+            padding: 20px;
+            margin: 0 15px;
+            box-sizing: border-box;
+         }
+      }
+      </style>
+   </head>
+   <body>
+      <div class="card">
+         <div id="weekday" class="placeholder"></div>
+         <div id="date"></div>
+         <div id="time"></div>
+      </div>
+
+      <script>
+         let running = false;
+         let startTime = null;
+         let timerInterval = null;
+         let currentDate = null;
+
+         const dateDiv = document.getElementById("date");
+         const timeDiv = document.getElementById("time");
+         const weekdayDiv = document.getElementById("weekday");
+         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+         if (isMobile) {
+            dateDiv.textContent = "Tap Screen";
+         } else {
+            dateDiv.textContent = "Press Space";
+         }
+
+
+         function getRandomDate() {
+            const min = new Date(1600, 0, 1).getTime();
+            const max = new Date(2400, 11, 31).getTime();
+            const randTime = Math.floor(Math.random() * (max - min + 1)) + min;
+            return new Date(randTime);
+         }
+
+         function formatDate(date) {
+            return date.toLocaleDateString("de-DE", {
+               day: "2-digit",
+               month: "2-digit",
+               year: "numeric",
+            });
+         }
+
+         function getWeekday(date) {
+            return date.toLocaleDateString("en-EN", { weekday: "long" });
+         }
+
+         function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+               const diff = (Date.now() - startTime) / 1000;
+               timeDiv.textContent = diff.toFixed(2) + " s";
+            }, 50);
+         }
+
+         function stopTimer() {
+            clearInterval(timerInterval);
+            const total = (Date.now() - startTime) / 1000;
+            timeDiv.textContent = total.toFixed(2) + " s";
+            weekdayDiv.style.transition = "all 0.2s ease";
+            weekdayDiv.textContent = getWeekday(currentDate);
+            weekdayDiv.classList.remove("placeholder");
+         }
+
+         const handleAction = () => {
+            if (!running) {
+               currentDate = getRandomDate();
+               dateDiv.textContent = formatDate(currentDate);
+               weekdayDiv.style.transition = "none";
+               weekdayDiv.textContent = "Show Weekday";
+               weekdayDiv.classList.add("placeholder");
+               startTimer();
+               running = true;
+            } else {
+               stopTimer();
+               running = false;
+            }
+         };
+
+         if (isMobile) {
+            document.addEventListener("click", handleAction);
+         } else {
+            document.addEventListener("keydown", (e) => {
+               if (e.code === "Space") {
+                  e.preventDefault();
+                  handleAction();
+               }
+            });
+         }
+      </script>
+   </body>
+</html>

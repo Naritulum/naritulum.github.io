@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cipher</title>
+<link rel="icon" type="image/png" href="https://img.icons8.com/?size=1000&id=kDMAGBvpqAyW&format=png">
+<style>
+  /* Design tokens */
+  :root{
+    --bg-0:#05070d;
+    --bg-1:#0a1120;
+    --surface:rgba(20,28,48,0.55);
+    --surface-solid:#111a2e;
+    --surface-border:rgba(126,164,255,0.16);
+    --surface-border-strong:rgba(126,164,255,0.32);
+    --text-0:#e9edf9;
+    --text-1:#9aa6c3;
+    --text-2:#5b6684;
+    --accent-1:#3b82f6;
+    --accent-2:#22d3ee;
+    --accent-gradient:linear-gradient(135deg,var(--accent-1) 0%,var(--accent-2) 100%);
+    --danger:#f2726f;
+    --success:#34d399;
+    --info:#7ea6ff;
+    --radius-lg:20px;
+    --radius-md:14px;
+    --radius-sm:9px;
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,"SF Mono","Cascadia Code","Consolas","Liberation Mono",monospace;
+    --ease:cubic-bezier(.16,.84,.44,1);
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    /* 100vh als Fallback für Browser ohne dvh-Unterstützung; 100dvh (dynamic
+       viewport height) berücksichtigt zusätzlich ein-/ausklappende
+       Adressleisten (mobil) und wird von neueren Browsern automatisch
+       bevorzugt, da die zweite Deklaration die erste überschreibt. Das ist
+       die eigentliche Ursache der F11-Unterschiede: 100vh weicht ohne
+       Vollbild vom tatsächlich sichtbaren Bereich ab, 100dvh nicht. */
+    min-height:100vh;
+    min-height:100dvh;
+    font-family:var(--font-ui);
+    color:var(--text-0);
+    background:var(--bg-0);
+    position:relative;
+    z-index:0;
+    display:flex;
+    flex-direction:column;
+    /* Zentrierung ausschließlich über margin:auto auf .app (siehe dort),
+       nicht über align-items/justify-content: letztere zentrieren zwar
+       optisch, machen bei Overflow aber den oberen Teil des Inhalts
+       unerreichbar (bekannter Flexbox-Bug) und lassen sich nicht robust
+       symmetrisch abfedern. margin:auto verhält sich stattdessen wie echtes
+       Blocklayout-Zentrieren: der freie Platz wird oben/unten *exakt*
+       gleich aufgeteilt, und bei Overflow kollabiert er gleichmäßig auf 0 –
+       das feste padding unten bleibt dabei in jedem Fall erhalten. */
+    padding:32px 16px;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+
+  /* Hintergrund als fixierter, auf den Viewport bezogener Layer statt als
+     background auf body: dadurch unabhängig von der (mit viel Text wachsenden)
+     Seitenhöhe, kein Kacheln/Abschneiden mehr beim Scrollen, auch nicht mobil. */
+  body::before{
+    content:'';
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    background:
+      radial-gradient(60% 50% at 18% 0%, rgba(59,130,246,0.16) 0%, transparent 60%),
+      radial-gradient(50% 45% at 100% 100%, rgba(34,211,238,0.10) 0%, transparent 60%),
+      var(--bg-0);
+    pointer-events:none;
+  }
+
+  .main-field,
+  #pwField{
+    -webkit-user-select:text;
+    user-select:text;
+  }
+
+  .app{
+    width:100%;
+    max-width:560px;
+    /* margin:auto (statt nur margin-top) auf allen vier Seiten: der
+       Flexbox-Container verteilt den verfügbaren Platz dadurch oben UND
+       unten zu exakt gleichen Teilen (kein einseitiges Nach-unten-Drücken
+       mehr). Wächst die Karte über den verfügbaren Platz hinaus, kollabieren
+       beide Margins gleichzeitig auf 0 – das körperliche padding des body
+       bleibt davon unberührt und garantiert weiterhin einen Mindestabstand
+       oben wie unten. */
+    margin:auto;
+  }
+
+  .app__header{
+    text-align:center;
+    margin-bottom:22px;
+  }
+
+  .app__header h1{
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:0.01em;
+    margin:0 0 6px;
+    color:var(--text-0);
+  }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--surface-border);
+    border-radius:var(--radius-lg);
+    padding:26px;
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  .field-group{
+    margin-bottom:18px;
+  }
+
+  .textarea-wrap{
+    position:relative;
+    border-radius:var(--radius-md);
+    border:1px solid var(--surface-border);
+    background:rgba(6,10,20,0.55);
+    transition:border-color .2s var(--ease), box-shadow .2s var(--ease);
+  }
+
+  .textarea-wrap:focus-within{
+    border-color:var(--surface-border-strong);
+    box-shadow:0 0 0 3px rgba(59,130,246,0.14);
+  }
+
+  .main-field{
+    display:block;
+    width:100%;
+    min-height:180px;
+    resize:vertical;
+    padding:16px 44px 16px 16px;
+    border:none;
+    outline:none;
+    background:transparent;
+    color:var(--text-0);
+    font-family:var(--font-mono);
+    font-size:14px;
+    line-height:1.6;
+    white-space:pre-wrap;
+    word-break:normal;
+    overflow-wrap:anywhere;
+    border-radius:var(--radius-md);
+    transition:filter .28s var(--ease), opacity .28s var(--ease), transform .28s var(--ease);
+  }
+
+  .main-field.is-digits{
+    word-break:break-all;
+    overflow-wrap:break-word;
+  }
+
+  .main-field::placeholder{color:var(--text-2);}
+
+  .main-field.is-transitioning{
+    filter:blur(7px);
+    opacity:0;
+    transform:scale(.985);
+  }
+
+  .clear-btn{
+    position:absolute;
+    top:10px;
+    right:10px;
+    width:26px;
+    height:26px;
+    border:none;
+    border-radius:50%;
+    background:rgba(255,255,255,0.06);
+    color:var(--text-1);
+    font-size:13px;
+    line-height:1;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:background .15s var(--ease), color .15s var(--ease), transform .15s var(--ease);
+  }
+  .clear-btn:hover{background:rgba(242,114,111,0.18); color:var(--danger);}
+  .clear-btn:active{transform:scale(0.9);}
+
+  .field-meta{
+    display:flex;
+    justify-content:flex-start;
+    margin-top:8px;
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    letter-spacing:0.02em;
+    color:var(--text-1);
+  }
+
+  .pw-label{
+    display:block;
+    font-size:12px;
+    color:var(--text-1);
+    margin-bottom:7px;
+    letter-spacing:0.02em;
+  }
+
+  .pw-wrap{
+    display:flex;
+    align-items:stretch;
+    gap:8px;
+  }
+
+  #pwField{
+    flex:1;
+    min-width:0;
+    padding:12px 14px;
+    border-radius:var(--radius-md);
+    border:1px solid var(--surface-border);
+    background:rgba(6,10,20,0.55);
+    color:var(--text-0);
+    font-family:var(--font-mono);
+    font-size:14px;
+    outline:none;
+    transition:border-color .2s var(--ease), box-shadow .2s var(--ease);
+  }
+  #pwField:focus{
+    border-color:var(--surface-border-strong);
+    box-shadow:0 0 0 3px rgba(59,130,246,0.14);
+  }
+
+  /* Maskierung erfolgt per JS (siehe Skript): das sichtbare Feld enthält
+     ausschließlich das Maskierungszeichen, niemals das echte Passwort.
+     Das ist plattformunabhängig und zeigt auch auf Mobilgeräten (iOS/Android)
+     nie kurz das eingegebene Zeichen an, da -webkit-text-security dort nicht
+     zuverlässig unterstützt wird. */
+
+  .eye-btn{
+    flex:0 0 auto;
+    width:46px;
+    border:1px solid var(--surface-border);
+    border-radius:var(--radius-md);
+    background:rgba(6,10,20,0.55);
+    color:var(--text-1);
+    font-size:16px;
+    cursor:pointer;
+    -webkit-user-select:none;
+    user-select:none;
+    transition:background .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+  }
+  .eye-btn:hover{color:var(--text-0); border-color:var(--surface-border-strong);}
+  .eye-btn.is-revealing{color:var(--accent-2); border-color:var(--surface-border-strong);}
+
+  .mode-switch{
+    position:relative;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    padding:4px;
+    margin-bottom:18px;
+    border-radius:var(--radius-md);
+    border:1px solid var(--surface-border);
+    background:rgba(6,10,20,0.55);
+  }
+
+  .mode-switch__thumb{
+    position:absolute;
+    top:4px;
+    left:4px;
+    width:calc(50% - 4px);
+    height:calc(100% - 8px);
+    border-radius:calc(var(--radius-md) - 5px);
+    background:var(--accent-gradient);
+    box-shadow:0 10px 24px -10px rgba(59,130,246,0.6);
+    transition:transform .25s var(--ease);
+    will-change:transform;
+  }
+
+  .mode-switch.is-decrypt .mode-switch__thumb{
+    transform:translateX(100%);
+  }
+
+  .mode-switch__option{
+    position:relative;
+    z-index:1;
+    border:none;
+    background:transparent;
+    padding:11px 12px;
+    font-family:var(--font-ui);
+    font-size:13.5px;
+    font-weight:700;
+    letter-spacing:0.01em;
+    color:var(--text-1);
+    cursor:pointer;
+    border-radius:calc(var(--radius-md) - 5px);
+    transition:color .2s var(--ease);
+  }
+
+  .mode-switch__option.is-active{color:#04101f;}
+  .mode-switch__option:disabled{cursor:progress;}
+
+  .toggle-btn{
+    width:100%;
+    margin-top:4px;
+    padding:15px 20px;
+    border:none;
+    border-radius:var(--radius-md);
+    background:var(--accent-gradient);
+    color:#04101f;
+    font-family:var(--font-ui);
+    font-size:15px;
+    font-weight:700;
+    letter-spacing:0.01em;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    box-shadow:0 12px 30px -10px rgba(59,130,246,0.55);
+    transition:transform .15s var(--ease), box-shadow .15s var(--ease), filter .15s var(--ease);
+  }
+  .toggle-btn:hover{transform:translateY(-1px); box-shadow:0 16px 36px -10px rgba(59,130,246,0.7);}
+  .toggle-btn:active{transform:translateY(0px) scale(0.99);}
+  .toggle-btn:disabled{opacity:0.6; cursor:progress; filter:saturate(0.7);}
+
+  .status-msg{
+    min-height:18px;
+    margin:14px 0 0;
+    font-size:12.5px;
+    text-align:center;
+    color:var(--text-1);
+    opacity:0;
+    transform:translateY(-2px);
+    transition:opacity .2s var(--ease), transform .2s var(--ease);
+  }
+  .status-msg.is-visible{opacity:1; transform:translateY(0);}
+  .status-msg--error{color:var(--danger);}
+  .status-msg--success{color:var(--success);}
+  .status-msg--info{color:var(--info);}
+
+  @media (max-width:480px){
+    .card{padding:20px;}
+    .main-field{min-height:150px;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important; animation:none !important;}
+  }
+</style>
+</head>
+<body>
+
+  <div class="app">
+    <header class="app__header">
+      <h1>Cipher</h1>
+    </header>
+
+    <main class="card">
+
+      <div id="modeSwitch" class="mode-switch" role="group" aria-label="Mode">
+        <span class="mode-switch__thumb" aria-hidden="true"></span>
+        <button type="button" class="mode-switch__option is-active" data-mode="plaintext" aria-pressed="true">Encrypt</button>
+        <button type="button" class="mode-switch__option" data-mode="encrypted" aria-pressed="false">Decrypt</button>
+      </div>
+
+      <div class="field-group">
+        <div class="textarea-wrap">
+          <textarea
+            id="mainField"
+            class="main-field"
+            spellcheck="false"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            placeholder="Enter text …"
+          ></textarea>
+          <button id="clearBtn" class="clear-btn" type="button">✕</button>
+        </div>
+        <div class="field-meta">
+          <span id="charCounter">0 characters</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="pw-label" for="pwField">Password</label>
+        <div class="pw-wrap">
+          <input
+            id="pwField"
+            type="password"
+            autocomplete="new-password"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            readonly
+          >
+          <button id="eyeBtn" class="eye-btn" type="button">👁</button>
+        </div>
+      </div>
+
+      <button id="toggleBtn" class="toggle-btn" type="button">
+        <span class="toggle-btn__label">Encrypt</span>
+      </button>
+
+      <p id="statusMsg" class="status-msg" role="status" aria-live="polite"></p>
+    </main>
+  </div>
+
+<script>
+(function(){
+'use strict';
+
+// --- Crypto configuration (PBKDF2-HMAC-SHA256, AES-256-GCM) ---
+  const CONFIG = Object.freeze({
+    PBKDF2_ITERATIONS: 600000,
+    SALT_BYTES: 16,
+    IV_BYTES: 12,
+    AES_KEY_BITS: 256,
+    GCM_TAG_BITS: 128
+  });
+
+// --- 128-character alphabet, code 0-127 (7 bits/char, fits exactly) ---
+  const ALPHABET = (
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ' +   // 000–025
+    'abcdefghijklmnopqrstuvwxyz' +   // 026–051
+    '0123456789' +                   // 052–061
+    'ÄÖÜäöüß' +                       // 062–068
+    '.,;:!?\'"' +                    // 069–076
+    '()[]{}<>' +                     // 077–084
+    '+-=*/%^&_@' +                   // 085–094
+    '~€\\' +                         // 095–097
+    ' ' +                            // 098 (space)
+    '\n' +                           // 099 (newline)
+    '|#`' +                          // 100–102
+    '–—…«»' +                        // 103–107 typography
+    '„\u201C' +                      // 108–109 quotation marks
+    '$' +                            // 110 currency
+    '×÷±√≤≥≠∞' +                     // 111–118 math operators
+    'πΔμ' +                          // 119–121 greek symbols
+    '‰' +                            // 122 per mille
+    '→←∈∑≈'                          // 123–127 math/logic symbols
+  ).split('');
+
+  if (ALPHABET.length !== 128) {
+    throw new Error('Internal error.');
+  }
+
+  const CHAR_TO_CODE = new Map();
+  ALPHABET.forEach((ch, idx) => CHAR_TO_CODE.set(ch, idx));
+
+// --- Text <-> character codes ---
+  function textToCodes(text){
+    const codes = new Array(text.length);
+    for (let i = 0; i < text.length; i++){
+      const code = CHAR_TO_CODE.get(text[i]);
+      if (code === undefined){
+        throw new Error('Invalid input.');
+      }
+      codes[i] = code;
+    }
+    return codes;
+  }
+
+  function codesToText(codes){
+    let out = '';
+    for (let i = 0; i < codes.length; i++){
+      const ch = ALPHABET[codes[i]];
+      if (ch === undefined){
+        throw new Error('Invalid input.');
+      }
+      out += ch;
+    }
+    return out;
+  }
+
+// --- Codes <-> packed bytes (7 bits/char, 4-byte length header) ---
+  const BITS_PER_CODE = 7;
+  const COUNT_HEADER_BYTES = 4;
+
+  function packCodes(codes){
+    const n = codes.length;
+    const byteLen = Math.ceil((n * BITS_PER_CODE) / 8);
+    const out = new Uint8Array(COUNT_HEADER_BYTES + byteLen);
+
+    out[0] = (n >>> 24) & 0xFF;
+    out[1] = (n >>> 16) & 0xFF;
+    out[2] = (n >>> 8) & 0xFF;
+    out[3] = n & 0xFF;
+
+    let acc = 0, accBits = 0, pos = COUNT_HEADER_BYTES;
+    for (let i = 0; i < n; i++){
+      acc = (acc << BITS_PER_CODE) | codes[i];
+      accBits += BITS_PER_CODE;
+      while (accBits >= 8){
+        accBits -= 8;
+        out[pos++] = (acc >>> accBits) & 0xFF;
+      }
+    }
+    if (accBits > 0){
+      out[pos++] = (acc << (8 - accBits)) & 0xFF;
+    }
+    return out;
+  }
+
+  function unpackCodes(bytes){
+    if (bytes.length < COUNT_HEADER_BYTES){
+      throw new Error('Incorrect password.');
+    }
+    const n = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+    const codes = new Array(n);
+    let acc = 0, accBits = 0, pos = COUNT_HEADER_BYTES, outIdx = 0;
+    while (outIdx < n){
+      while (accBits < BITS_PER_CODE){
+        if (pos >= bytes.length){
+          throw new Error('Incorrect password.');
+        }
+        acc = (acc << 8) | bytes[pos++];
+        accBits += 8;
+      }
+      accBits -= BITS_PER_CODE;
+      codes[outIdx++] = (acc >>> accBits) & 0x7F;
+    }
+    return codes;
+  }
+
+// --- Live input filtering ---
+  function filterPlaintext(str){
+    str = str.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    let out = '';
+    for (const ch of str){
+      if (CHAR_TO_CODE.has(ch)) out += ch;
+    }
+    return out;
+  }
+
+  function filterDigits(str){
+    return str.replace(/[^0-9A-Za-z]/g, '');
+  }
+
+// --- Bytes <-> single Base62 string (marker-byte-prefixed big integer) ---
+  const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  const BASE62_CODE = new Map();
+  BASE62_ALPHABET.split('').forEach((ch, idx) => BASE62_CODE.set(ch, idx));
+  const BASE62 = 62n;
+
+  function bigToBase62(big){
+    if (big === 0n) return '0';
+    let out = '';
+    while (big > 0n){
+      const rem = big % BASE62;
+      big = big / BASE62;
+      out = BASE62_ALPHABET[Number(rem)] + out;
+    }
+    return out;
+  }
+
+  function base62ToBig(str){
+    let big = 0n;
+    for (let i = 0; i < str.length; i++){
+      const val = BASE62_CODE.get(str[i]);
+      if (val === undefined){
+        throw new Error('Incorrect password.');
+      }
+      big = big * BASE62 + BigInt(val);
+    }
+    return big;
+  }
+
+  function bytesToDecimalString(bytes){
+    // Marker-Byte 0x01 vor die eigentlichen Bytes setzen: da es als
+    // führendes Byte garantiert ungleich 0x00 ist, bleibt es (bzw. sein
+    // einziges signifikantes Hex-Nibble '1') beim Umwandeln in einen BigInt
+    // immer erhalten – dadurch gehen keine führenden 0x00-Bytes der
+    // eigentlichen Nutzdaten mehr verloren, ganz ohne separaten Längenpräfix.
+    let hex = '01';
+    for (let i = 0; i < bytes.length; i++){
+      hex += bytes[i].toString(16).padStart(2, '0');
+    }
+    const big = BigInt('0x' + hex);
+    return bigToBase62(big);
+  }
+
+  function decimalStringToBytes(decimalStr){
+    const big = base62ToBig(decimalStr);
+    const hex = big.toString(16);
+    // Gültige Werte haben stets eine ungerade Hex-Länge und beginnen mit
+    // '1': das ist das Marker-Byte 0x01, dessen führende Null-Nibble beim
+    // Umwandeln in den BigInt mit-verschwunden ist. Fehlt dieses Muster,
+    // war das Passwort falsch oder die Daten sind beschädigt.
+    if (hex.length % 2 === 0 || hex.charAt(0) !== '1'){
+      throw new Error('Incorrect password.');
+    }
+    const bytesHex = hex.slice(1);
+    const bytes = new Uint8Array(bytesHex.length / 2);
+    for (let i = 0; i < bytes.length; i++){
+      bytes[i] = parseInt(bytesHex.substr(i * 2, 2), 16);
+    }
+    return bytes;
+  }
+
+// --- Key derivation (PBKDF2) & AES-256-GCM ---
+  async function deriveKey(password, salt){
+    const passwordBytes = new TextEncoder().encode(password);
+    const baseKey = await crypto.subtle.importKey(
+      'raw', passwordBytes, 'PBKDF2', false, ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: CONFIG.PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      baseKey,
+      { name: 'AES-GCM', length: CONFIG.AES_KEY_BITS },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  async function encryptMessage(plaintext, password){
+    const codes = textToCodes(plaintext);
+    const dataBytes = packCodes(codes);
+    const salt = crypto.getRandomValues(new Uint8Array(CONFIG.SALT_BYTES));
+    const iv = crypto.getRandomValues(new Uint8Array(CONFIG.IV_BYTES));
+    const key = await deriveKey(password, salt);
+
+    const cipherBuf = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, tagLength: CONFIG.GCM_TAG_BITS },
+      key,
+      dataBytes
+    );
+    const cipherBytes = new Uint8Array(cipherBuf);
+
+    const combined = new Uint8Array(salt.length + iv.length + cipherBytes.length);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(cipherBytes, salt.length + iv.length);
+
+    return bytesToDecimalString(combined);
+  }
+
+  async function decryptMessage(decimalString, password){
+    const combined = decimalStringToBytes(decimalString);
+    const minLength = CONFIG.SALT_BYTES + CONFIG.IV_BYTES + (CONFIG.GCM_TAG_BITS / 8);
+    if (combined.length < minLength){
+      throw new Error('Incorrect password.');
+    }
+    const salt = combined.slice(0, CONFIG.SALT_BYTES);
+    const iv = combined.slice(CONFIG.SALT_BYTES, CONFIG.SALT_BYTES + CONFIG.IV_BYTES);
+    const cipherBytes = combined.slice(CONFIG.SALT_BYTES + CONFIG.IV_BYTES);
+
+    const key = await deriveKey(password, salt);
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv, tagLength: CONFIG.GCM_TAG_BITS },
+      key,
+      cipherBytes
+    );
+    const codes = unpackCodes(new Uint8Array(plainBuf));
+    return codesToText(codes);
+  }
+
+// --- Clipboard (with fallback for non-secure/file:// contexts) ---
+  async function copyToClipboard(text){
+    try {
+      if (navigator.clipboard && window.isSecureContext){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      throw new Error('Clipboard API unavailable.');
+    } catch (_e){
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        ta.style.pointerEvents = 'none';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (_e2){
+        return false;
+      }
+    }
+  }
+
+// --- UI wiring ---
+  const mainField = document.getElementById('mainField');
+  const clearBtn = document.getElementById('clearBtn');
+  const charCounter = document.getElementById('charCounter');
+  const pwField = document.getElementById('pwField');
+  const eyeBtn = document.getElementById('eyeBtn');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const toggleLabel = toggleBtn.querySelector('.toggle-btn__label');
+  const statusMsg = document.getElementById('statusMsg');
+  const modeSwitch = document.getElementById('modeSwitch');
+  const modeOptions = Array.from(modeSwitch.querySelectorAll('.mode-switch__option'));
+
+  let currentMode = 'plaintext'; // 'plaintext' | 'encrypted'
+  let statusTimeout = null;
+
+  pwField.name = 'pw-' + Math.random().toString(36).slice(2);
+
+  // Plattformunabhängige Sofort-Maskierung: das sichtbare Feld (type="text")
+  // enthält niemals das echte Passwort, sondern ausschließlich Maskierungs-
+  // zeichen ("•"). Das eigentliche Passwort wird ausschließlich in realPw
+  // (Speicher, kein DOM) gehalten. Da der Browser selbst nie ein Klartext-
+  // zeichen ins DOM einfügt, gibt es – anders als bei -webkit-text-security,
+  // das auf vielen mobilen Tastaturen kurz das Zeichen anzeigt, bevor die
+  // Maskierung greift – auf keiner Plattform ein kurzes Aufblitzen.
+  const MASK_CHAR = '•';
+  let realPw = '';
+  pwField.type = 'text';
+
+  function setCaret(pos){
+    pwField.setSelectionRange(pos, pos);
+  }
+
+  pwField.addEventListener('beforeinput', (e) => {
+    const start = pwField.selectionStart;
+    const end = pwField.selectionEnd;
+    switch (e.inputType){
+      case 'insertText':
+      case 'insertFromPaste':
+      case 'insertFromDrop': {
+        e.preventDefault();
+        const inserted = e.data || '';
+        realPw = realPw.slice(0, start) + inserted + realPw.slice(end);
+        pwField.value = MASK_CHAR.repeat(realPw.length);
+        setCaret(start + inserted.length);
+        break;
+      }
+      case 'deleteContentBackward': {
+        e.preventDefault();
+        if (start !== end){
+          realPw = realPw.slice(0, start) + realPw.slice(end);
+          pwField.value = MASK_CHAR.repeat(realPw.length);
+          setCaret(start);
+        } else if (start > 0){
+          realPw = realPw.slice(0, start - 1) + realPw.slice(start);
+          pwField.value = MASK_CHAR.repeat(realPw.length);
+          setCaret(start - 1);
+        }
+        break;
+      }
+      case 'deleteContentForward': {
+        e.preventDefault();
+        if (start !== end){
+          realPw = realPw.slice(0, start) + realPw.slice(end);
+          pwField.value = MASK_CHAR.repeat(realPw.length);
+          setCaret(start);
+        } else if (start < realPw.length){
+          realPw = realPw.slice(0, start) + realPw.slice(start + 1);
+          pwField.value = MASK_CHAR.repeat(realPw.length);
+          setCaret(start);
+        }
+        break;
+      }
+      case 'insertLineBreak':
+      case 'insertParagraph': {
+        e.preventDefault();
+        break;
+      }
+      default: {
+        // Unbekannter/zusammengesetzter Inputtyp (z. B. IME-Komposition):
+        // sicherheitshalber blockieren, damit nie Klartext ins DOM gelangt.
+        e.preventDefault();
+        break;
+      }
+    }
+  });
+
+  // Fallback für Fälle ohne InputEvent-Unterstützung (sehr alte Browser):
+  // synchronisiert realPw grob aus dem sichtbaren Feld. Da dort ohnehin nur
+  // Maskierungszeichen stehen sollten, dient dies nur als Absicherung gegen
+  // ungefilterte Eingaben (z. B. Autofill), nicht als Normalpfad.
+  pwField.addEventListener('input', () => {
+    if (/[^•]/.test(pwField.value)){
+      realPw = pwField.value.replace(/•/g, '');
+      pwField.value = MASK_CHAR.repeat(realPw.length);
+      setCaret(realPw.length);
+    }
+  });
+
+  function getPassword(){
+    return realPw;
+  }
+
+  function clearPassword(){
+    realPw = '';
+    pwField.value = '';
+  }
+
+  function wait(ms){
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function updateCharCounter(){
+    charCounter.textContent = mainField.value.length + ' characters';
+  }
+
+  function updateModeUI(){
+    const isDecrypt = currentMode === 'encrypted';
+    toggleLabel.textContent = isDecrypt ? 'Decrypt' : 'Encrypt';
+    mainField.placeholder = isDecrypt ? 'Enter encrypted text …' : 'Enter text …';
+    mainField.classList.toggle('is-digits', isDecrypt);
+    modeSwitch.classList.toggle('is-decrypt', isDecrypt);
+    modeOptions.forEach(btn => {
+      const active = btn.dataset.mode === currentMode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function showStatus(message, type){
+    statusMsg.textContent = message;
+    statusMsg.className = 'status-msg status-msg--' + type;
+    void statusMsg.offsetWidth;
+    statusMsg.classList.add('is-visible');
+    clearTimeout(statusTimeout);
+    if (type !== 'info'){
+      statusTimeout = setTimeout(() => statusMsg.classList.remove('is-visible'), 4200);
+    }
+  }
+
+  async function animatedSwap(newContent){
+    mainField.classList.add('is-transitioning');
+    await wait(280);
+    mainField.value = newContent;
+    mainField.scrollTop = 0;
+    updateCharCounter();
+    mainField.classList.remove('is-transitioning');
+    await wait(280);
+  }
+
+  mainField.addEventListener('input', () => {
+    const filterFn = currentMode === 'plaintext' ? filterPlaintext : filterDigits;
+    const before = mainField.value;
+    const selStart = mainField.selectionStart;
+    const filtered = filterFn(before);
+    if (filtered !== before){
+      const diff = before.length - filtered.length;
+      mainField.value = filtered;
+      const newPos = Math.max(0, selStart - diff);
+      mainField.setSelectionRange(newPos, newPos);
+    }
+    updateCharCounter();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    mainField.value = '';
+    updateCharCounter();
+    mainField.focus();
+  });
+
+  function revealPw(){
+    const pos = pwField.selectionStart;
+    pwField.value = realPw;
+    setCaret(pos);
+    eyeBtn.classList.add('is-revealing');
+  }
+  function hidePw(){
+    const pos = pwField.selectionStart;
+    pwField.value = MASK_CHAR.repeat(realPw.length);
+    setCaret(pos);
+    eyeBtn.classList.remove('is-revealing');
+  }
+  eyeBtn.addEventListener('mousedown', revealPw);
+  eyeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); revealPw(); }, { passive:false });
+  ['mouseup', 'mouseleave', 'blur'].forEach(evt => eyeBtn.addEventListener(evt, hidePw));
+  ['touchend', 'touchcancel'].forEach(evt => eyeBtn.addEventListener(evt, hidePw));
+
+  pwField.addEventListener('focus', () => pwField.removeAttribute('readonly'));
+  pwField.addEventListener('blur', () => pwField.setAttribute('readonly', 'readonly'));
+  ['paste', 'drop', 'dragover', 'contextmenu'].forEach(evt => {
+    pwField.addEventListener(evt, e => e.preventDefault());
+  });
+
+  modeOptions.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled || btn.dataset.mode === currentMode) return;
+      currentMode = btn.dataset.mode;
+      updateModeUI();
+      mainField.value = '';
+      updateCharCounter();
+      statusMsg.classList.remove('is-visible');
+    });
+  });
+
+  toggleBtn.addEventListener('click', async () => {
+    const password = getPassword();
+    const content = mainField.value;
+
+    if (!password || !content){
+      return;
+    }
+
+    toggleBtn.disabled = true;
+    modeOptions.forEach(btn => { btn.disabled = true; });
+    try {
+      if (currentMode === 'plaintext'){
+        showStatus('Encrypting …', 'info');
+        const encrypted = await encryptMessage(content, password);
+        await animatedSwap(encrypted);
+        currentMode = 'encrypted';
+        updateModeUI();
+        clearPassword();
+        const copied = await copyToClipboard(encrypted);
+        showStatus(
+          copied ? 'Encrypted – copied to clipboard.' : 'Encrypted.',
+          copied ? 'success' : 'error'
+        );
+      } else {
+        showStatus('Decrypting …', 'info');
+        const decrypted = await decryptMessage(content, password);
+        await animatedSwap(decrypted);
+        currentMode = 'plaintext';
+        updateModeUI();
+        clearPassword();
+        showStatus('Decrypted.', 'success');
+      }
+    } catch (err){
+      showStatus('Incorrect password.', 'error');
+      console.error(err);
+    } finally {
+      toggleBtn.disabled = false;
+      modeOptions.forEach(btn => { btn.disabled = false; });
+    }
+  });
+
+  updateCharCounter();
+  updateModeUI();
+
+})();
+</script>
+</body>
+</html>
